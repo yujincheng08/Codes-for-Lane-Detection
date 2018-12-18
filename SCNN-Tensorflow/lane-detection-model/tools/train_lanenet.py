@@ -460,7 +460,8 @@ def train_net_gpu(dataset_dir, weights_path=None, net_flag='vgg'):
                         continue
         for epoch in range(CFG.TRAIN.EPOCHS):
             t_start = time.time()
-            gt_img, instance_gt_labels, existence_gt_labels = train_dataset.next_batch(CFG.TRAIN.BATCH_SIZE)
+            gt_img, instance_gt_labels, existence_gt_labels = \
+                train_dataset.next_batch(CFG.TRAIN.BATCH_SIZE * CFG.TRAIN.GPU_NUM)
 
             gt_img = [cv2.resize(img,
                                  dsize=(CFG.TRAIN.IMG_WIDTH, CFG.TRAIN.IMG_HEIGHT),
