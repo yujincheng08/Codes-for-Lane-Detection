@@ -83,8 +83,7 @@ class DataSet(object):
         :param batch_size:
         :return:
         """
-        assert len(self._gt_label_instance_list) == len(self._gt_label_existence_list) \
-               == len(self._gt_img_list)
+        assert len(self._gt_label_instance_list) == len(self._gt_label_existence_list) == len(self._gt_img_list)
 
         idx_start = batch_size * self._next_batch_loop_count
         idx_end = batch_size * self._next_batch_loop_count + batch_size
@@ -113,4 +112,3 @@ class DataSet(object):
 
             self._next_batch_loop_count += 1
             return gt_imgs, gt_labels_instance, gt_labels_existence
-
