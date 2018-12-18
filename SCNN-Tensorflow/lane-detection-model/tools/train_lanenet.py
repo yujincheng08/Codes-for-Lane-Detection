@@ -316,7 +316,7 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
 
                 # validation part
                 gt_imgs_val, instance_gt_labels_val, existence_gt_labels_val \
-                    = val_dataset.next_batch(CFG.TRAIN.VAL_BATCH_SIZE)
+                    = val_dataset.next_batch(CFG.TRAIN.VAL_BATCH_SIZE * CFG.TRAIN.GPU_NUM)
                 gt_imgs_val = [cv2.resize(tmp,
                                           dsize=(CFG.TRAIN.IMG_WIDTH, CFG.TRAIN.IMG_HEIGHT),
                                           dst=tmp,
@@ -420,27 +420,64 @@ def train_net_gpu(dataset_dir, weights_path=None, net_flag='vgg'):
 
     train_cost_time_mean = []
 
-    for epoch in range(CFG.TRAIN.EPOCHS):
-        t_start = time.time()
-        gt_img, instance_gt_labels, existence_gt_labels = train_dataset.next_batch(CFG.TRAIN.BATCH_SIZE)
+    saver = tf.train.Saver()
+    model_save_dir = 'model/culane_lanenet/culane_scnn'
+    if not ops.exists(model_save_dir):
+        os.makedirs(model_save_dir)
+    train_start_time = time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(time.time()))
+    model_name = 'culane_lanenet_{:s}_{:s}.ckpt'.format(net_flag, str(train_start_time))
+    model_save_path = ops.join(model_save_dir, model_name)
 
-        gt_img = [cv2.resize(img,
-                             dsize=(CFG.TRAIN.IMG_WIDTH, CFG.TRAIN.IMG_HEIGHT),
-                             dst=img,
-                             interpolation=cv2.INTER_CUBIC)
-                  for img in gt_img]
+    sess_config = tf.ConfigProto(device_count={'GPU': CFG.TRAIN.GPU_NUM})
+    sess_config.gpu_options.per_process_gpu_memory_fraction = CFG.TRAIN.GPU_MEMORY_FRACTION
+    sess_config.gpu_options.allow_growth = CFG.TRAIN.TF_ALLOW_GROWTH
+    sess_config.gpu_options.allocator_type = 'BFC'
 
-        gt_img = [(img - VGG_MEAN) for img in gt_img]
+    with tf.Session(config=sess_config) as sess:
+        with sess.as_default():
 
-        instance_gt_labels = [cv2.resize(tmp,
-                                         dsize=(CFG.TRAIN.IMG_WIDTH, CFG.TRAIN.IMG_HEIGHT),
-                                         dst=tmp,
-                                         interpolation=cv2.INTER_NEAREST)
-                              for tmp in instance_gt_labels]
+            if weights_path is None:
+                log.info('Training from scratch')
+                init = tf.global_variables_initializer()
+                sess.run(init)
+            else:
+                log.info('Restore model from last model checkpoint {:s}'.format(weights_path))
+                saver.restore(sess=sess, save_path=weights_path)
 
-        phase_train = 'train'
+            # 加载预训练参数
+            if net_flag == 'vgg' and weights_path is None:
+                pretrained_weights = np.load(
+                    './data/vgg16.npy',
+                    encoding='latin1').item()
 
-        with tf.Session() as sess:
+                for vv in tf.trainable_variables():
+                    weights_key = vv.name.split('/')[-3]
+                    try:
+                        weights = pretrained_weights[weights_key][0]
+                        _op = tf.assign(vv, weights)
+                        sess.run(_op)
+                    except Exception as e:
+                        continue
+        for epoch in range(CFG.TRAIN.EPOCHS):
+            t_start = time.time()
+            gt_img, instance_gt_labels, existence_gt_labels = train_dataset.next_batch(CFG.TRAIN.BATCH_SIZE)
+
+            gt_img = [cv2.resize(img,
+                                 dsize=(CFG.TRAIN.IMG_WIDTH, CFG.TRAIN.IMG_HEIGHT),
+                                 dst=img,
+                                 interpolation=cv2.INTER_CUBIC)
+                      for img in gt_img]
+
+            gt_img = [(img - VGG_MEAN) for img in gt_img]
+
+            instance_gt_labels = [cv2.resize(tmp,
+                                             dsize=(CFG.TRAIN.IMG_WIDTH, CFG.TRAIN.IMG_HEIGHT),
+                                             dst=tmp,
+                                             interpolation=cv2.INTER_NEAREST)
+                                  for tmp in instance_gt_labels]
+
+            phase_train = 'train'
+
             sess.run(train_op, feed_dict={
                 input_tensor: gt_img,
                 instance_label_tensor: instance_gt_labels,
@@ -448,10 +485,11 @@ def train_net_gpu(dataset_dir, weights_path=None, net_flag='vgg'):
                 phase: phase_train
             })
 
-        cost_time = time.time() - t_start
-        train_cost_time_mean.append(cost_time)
+            cost_time = time.time() - t_start
+            train_cost_time_mean.append(cost_time)
 
-    return
+            if epoch % 1000 == 0:
+                saver.save(sess=sess, save_path=model_save_path, global_step=epoch)
 
 
 if __name__ == '__main__':
