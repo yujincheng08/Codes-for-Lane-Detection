@@ -29,7 +29,6 @@ from lanenet_model import lanenet_merge_model
 from data_provider import lanenet_data_processor
 
 CFG = global_config.cfg
-VGG_MEAN = [103.939, 116.779, 123.68]
 
 
 def init_args():

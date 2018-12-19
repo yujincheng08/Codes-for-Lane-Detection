@@ -13,11 +13,7 @@ import tensorflow as tf
 from config import global_config
 
 CFG = global_config.cfg
-
-try:
-    from cv2 import cv2
-except ImportError:
-    pass
+VGG_MEAN = [103.939, 116.779, 123.68]
 
 
 class DataSet(object):
@@ -45,7 +41,8 @@ class DataSet(object):
         img_decoded = tf.image.decode_jpeg(img_raw, channels=3)
         img_resized = tf.image.resize_images(img_decoded, [CFG.TRAIN.IMG_HEIGHT, CFG.TRAIN.IMG_WIDTH],
                                              method=tf.image.ResizeMethod.BICUBIC)
-        return tf.cast(img_resized, tf.float32)
+        img_casted = tf.cast(img_resized, tf.float32)
+        return tf.subtract(img_casted, VGG_MEAN)
 
     @staticmethod
     def process_label_instance(label_instance_queue):
