@@ -187,12 +187,12 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
                                                learning_rate, momentum=0.9)
     img, label_instance, label_existence = train_dataset.next_batch(CFG.TRAIN.BATCH_SIZE)
     batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
-        [img, label_instance, label_existence], capacity=2 * CFG.TRAIN.GPU_NUM)
+        [img, label_instance, label_existence], capacity=2 * CFG.TRAIN.GPU_NUM, num_threads=CFG.TRAIN.CPU_NUM)
 
     val_img, val_label_instance, val_label_existence = val_dataset.next_batch(CFG.TRAIN.BATCH_SIZE)
     val_batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
-        [val_img, val_label_instance, val_label_existence], capacity=2 * CFG.TRAIN.GPU_NUM)
-    tower_grads = []
+        [val_img, val_label_instance, val_label_existence], capacity=2 * CFG.TRAIN.GPU_NUM,
+        num_threads=CFG.TRAIN.CPU_NUM)
     with tf.variable_scope(tf.get_variable_scope()):
         for i in range(CFG.TRAIN.GPU_NUM):
             with tf.device('/gpu:%d' % i):
