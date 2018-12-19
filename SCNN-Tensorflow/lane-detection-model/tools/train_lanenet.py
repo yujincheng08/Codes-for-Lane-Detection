@@ -83,7 +83,6 @@ def average_gradients(tower_grads):
 
 
 def forward(batch_queue, net, phase, optimizer=None):
-    tower_grads = []
     img_batch, label_instance_batch, label_existence_batch = batch_queue.dequeue()
     inference = net.inference(img_batch, phase)
     compute_ret = net.loss(inference, label_instance_batch, label_existence_batch)
@@ -91,7 +90,8 @@ def forward(batch_queue, net, phase, optimizer=None):
     tf.get_variable_scope().reuse_variables()
     if optimizer is not None:
         grads = optimizer.compute_gradients(total_loss)
-        tower_grads.append(grads)
+    else:
+        grads = None
     instance_loss = compute_ret['instance_seg_loss']
     existence_loss = compute_ret['existence_pre_loss']
 
@@ -158,7 +158,7 @@ def forward(batch_queue, net, phase, optimizer=None):
     IoU_4 = tf.divide(tf.cast(overlap_4, tf.float32), tf.cast(union_4, tf.float32))
 
     IoU = tf.reduce_mean(tf.stack([IoU_1, IoU_2, IoU_3, IoU_4]))
-    return total_loss, instance_loss, existence_loss, accuracy, accuracy_back, IoU, out_logits_out, tower_grads
+    return total_loss, instance_loss, existence_loss, accuracy, accuracy_back, IoU, out_logits_out, grads
 
 
 def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
@@ -192,14 +192,16 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
     val_img, val_label_instance, val_label_existence = val_dataset.next_batch(CFG.TRAIN.BATCH_SIZE)
     val_batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
         [val_img, val_label_instance, val_label_existence], capacity=2 * CFG.TRAIN.GPU_NUM)
+    tower_grads = []
     with tf.variable_scope(tf.get_variable_scope()):
         for i in range(CFG.TRAIN.GPU_NUM):
             with tf.device('/gpu:%d' % i):
                 with tf.name_scope('tower_%d' % i):
                     total_loss, instance_loss, existence_loss, accuracy, accuracy_back, _, out_logits_out, \
-                    tower_grads = forward(batch_queue, net, phase, optimizer)
+                        grad = forward(batch_queue, net, phase, optimizer)
+                    tower_grads.append(grad)
                     val_op_total_loss, val_op_instance_loss, val_op_existence_loss, val_op_accuracy, \
-                    val_op_accuracy_back, val_op_IoU, _, _ = forward(val_batch_queue, net, phase)
+                        val_op_accuracy_back, val_op_IoU, _, _ = forward(val_batch_queue, net, phase)
 
     grads = average_gradients(tower_grads)
 
