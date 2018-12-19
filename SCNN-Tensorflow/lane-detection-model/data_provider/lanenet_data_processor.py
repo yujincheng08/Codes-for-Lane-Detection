@@ -29,8 +29,12 @@ class DataSet(object):
         """
         :param dataset_info_file:
         """
+        self._len = 0
         self.dataset_info_file = dataset_info_file
         self._img, self._label_instance, self._label_existence = self._init_dataset()
+
+    def __len__(self):
+        return self._len
 
     def distorted_inputs(self):
         pass
@@ -75,6 +79,7 @@ class DataSet(object):
                 label_instance_list.append(info_tmp[1][1:])
                 label_existence_list.append([int(info_tmp[2]), int(info_tmp[3]), int(info_tmp[4]), int(info_tmp[5])])
 
+        self._len = len(img_list)
         # img_queue = tf.train.string_input_producer(img_list)
         # label_instance_queue = tf.train.string_input_producer(label_instance_list)
         with tf.name_scope('data_augmentation'):
