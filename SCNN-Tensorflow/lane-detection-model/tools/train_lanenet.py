@@ -377,20 +377,7 @@ def train_net_gpu(dataset_dir, weights_path=None, net_flag='vgg'):
     train_dataset = lanenet_data_processor.DataSet(train_dataset_file)
     val_dataset = lanenet_data_processor.DataSet(val_dataset_file)
 
-    input_tensor = tf.placeholder(dtype=tf.float32,
-                                  shape=[CFG.TRAIN.BATCH_SIZE * CFG.TRAIN.GPU_NUM, CFG.TRAIN.IMG_HEIGHT,
-                                         CFG.TRAIN.IMG_WIDTH, 3],
-                                  name='input_tensor')
-    instance_label_tensor = tf.placeholder(dtype=tf.int64,
-                                           shape=[CFG.TRAIN.BATCH_SIZE * CFG.TRAIN.GPU_NUM, CFG.TRAIN.IMG_HEIGHT,
-                                                  CFG.TRAIN.IMG_WIDTH],
-                                           name='instance_input_label')
-    existence_label_tensor = tf.placeholder(dtype=tf.float32,
-                                            shape=[CFG.TRAIN.BATCH_SIZE * CFG.TRAIN.GPU_NUM, 4],
-                                            name='existence_input_label')
-    phase = tf.placeholder(dtype=tf.string, shape=None, name='net_phase')
-
-    net = lanenet_merge_model.LaneNet(net_flag=net_flag, phase=phase)
+    net = lanenet_merge_model.LaneNet()
 
     tower_grads = []
 
@@ -403,12 +390,16 @@ def train_net_gpu(dataset_dir, weights_path=None, net_flag='vgg'):
     with tf.control_dependencies(update_ops):
         optimizer = tf.train.MomentumOptimizer(learning_rate=
                                                learning_rate, momentum=0.9)
+    img, label_instance, label_existence = train_dataset.next_batch(CFG.TRAIN.BATCH_SIZE)
+    batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
+        [img, label_instance, label_existence], capacity=2 * CFG.TRAIN.GPU_NUM)
     with tf.variable_scope(tf.get_variable_scope()):
         for i in range(CFG.TRAIN.GPU_NUM):
             with tf.device('/gpu:%d' % i):
                 with tf.name_scope('tower_%d' % i) as scope:
-                    compute_ret = net.compute_loss(input_tensor=input_tensor, binary_label=instance_label_tensor,
-                                                   existence_label=existence_label_tensor, name='lanenet_loss')
+                    img_batch, label_instance_batch, label_existence_batch = batch_queue.dequeue()
+                    inference = net.inference(img_batch, 'train')
+                    compute_ret = net.loss(inference, label_instance_batch, label_existence_batch)
                     total_loss = compute_ret['total_loss']
                     tf.get_variable_scope().reuse_variables()
                     grads = optimizer.compute_gradients(total_loss)
@@ -428,7 +419,7 @@ def train_net_gpu(dataset_dir, weights_path=None, net_flag='vgg'):
     model_name = 'culane_lanenet_{:s}_{:s}.ckpt'.format(net_flag, str(train_start_time))
     model_save_path = ops.join(model_save_dir, model_name)
 
-    sess_config = tf.ConfigProto(device_count={'GPU': CFG.TRAIN.GPU_NUM})
+    sess_config = tf.ConfigProto(device_count={'GPU': CFG.TRAIN.GPU_NUM}, allow_soft_placement=True)
     sess_config.gpu_options.per_process_gpu_memory_fraction = CFG.TRAIN.GPU_MEMORY_FRACTION
     sess_config.gpu_options.allow_growth = CFG.TRAIN.TF_ALLOW_GROWTH
     sess_config.gpu_options.allocator_type = 'BFC'
@@ -451,43 +442,28 @@ def train_net_gpu(dataset_dir, weights_path=None, net_flag='vgg'):
                     encoding='latin1').item()
 
                 for vv in tf.trainable_variables():
-                    weights_key = vv.name.split('/')[-3]
-                    try:
-                        weights = pretrained_weights[weights_key][0]
-                        _op = tf.assign(vv, weights)
-                        sess.run(_op)
-                    except Exception as e:
-                        continue
+                    weights = vv.name.split('/')
+                    if len(weights) >= 3 and weights[-3] in pretrained_weights:
+                        try:
+                            weights_key = weights[-3]
+                            weights = pretrained_weights[weights_key][0]
+                            _op = tf.assign(vv, weights)
+                            sess.run(_op)
+                        except Exception as e:
+                            continue
         for epoch in range(CFG.TRAIN.EPOCHS):
             t_start = time.time()
-            gt_img, instance_gt_labels, existence_gt_labels = \
-                train_dataset.next_batch(CFG.TRAIN.BATCH_SIZE * CFG.TRAIN.GPU_NUM)
 
-            gt_img = [cv2.resize(img,
-                                 dsize=(CFG.TRAIN.IMG_WIDTH, CFG.TRAIN.IMG_HEIGHT),
-                                 dst=img,
-                                 interpolation=cv2.INTER_CUBIC)
-                      for img in gt_img]
-
-            gt_img = [(img - VGG_MEAN) for img in gt_img]
-
-            instance_gt_labels = [cv2.resize(tmp,
-                                             dsize=(CFG.TRAIN.IMG_WIDTH, CFG.TRAIN.IMG_HEIGHT),
-                                             dst=tmp,
-                                             interpolation=cv2.INTER_NEAREST)
-                                  for tmp in instance_gt_labels]
-
-            phase_train = 'train'
-
-            sess.run(train_op, feed_dict={
-                input_tensor: gt_img,
-                instance_label_tensor: instance_gt_labels,
-                existence_label_tensor: existence_gt_labels,
-                phase: phase_train
-            })
+            sess.run(train_op)
 
             cost_time = time.time() - t_start
             train_cost_time_mean.append(cost_time)
+            if epoch % CFG.TRAIN.DISPLAY_STEP == 0:
+                print(
+                    'Epoch: {:d} mean_time= {:5f}s ' % (epoch + 1,  np.mean(train_cost_time_mean)))
+
+            if epoch % 500 == 0:
+                train_cost_time_mean.clear()
 
             if epoch % 1000 == 0:
                 saver.save(sess=sess, save_path=model_save_path, global_step=epoch)
