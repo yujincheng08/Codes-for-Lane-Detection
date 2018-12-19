@@ -11,6 +11,7 @@
 import tensorflow as tf
 
 from config import global_config
+
 CFG = global_config.cfg
 
 try:
@@ -45,9 +46,11 @@ class DataSet(object):
     @staticmethod
     def process_label_instance(label_instance_queue):
         label_instance_raw = tf.read_file(label_instance_queue)
-        label_instance_decoded = tf.image.decode_png(label_instance_raw)
-        label_instance_decoded.set_shape([CFG.TRAIN.IMG_HEIGHT, CFG.TRAIN.IMG_WIDTH, 1])
-        return tf.cast(label_instance_decoded, tf.int32)
+        label_instance_decoded = tf.image.decode_png(label_instance_raw, channels=1)
+        label_instance_resized = tf.image.resize_images(label_instance_decoded,
+                                                        [CFG.TRAIN.IMG_HEIGHT, CFG.TRAIN.IMG_WIDTH],
+                                                        method=tf.image.ResizeMethod.BICUBIC)
+        return tf.cast(label_instance_resized, tf.int32)
 
     @staticmethod
     def process_label_existence(label_existence_queue):

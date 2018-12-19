@@ -451,6 +451,7 @@ def train_net_gpu(dataset_dir, weights_path=None, net_flag='vgg'):
                             sess.run(_op)
                         except Exception as e:
                             continue
+        tf.train.start_queue_runners(sess=sess)
         for epoch in range(CFG.TRAIN.EPOCHS):
             t_start = time.time()
 
@@ -460,7 +461,7 @@ def train_net_gpu(dataset_dir, weights_path=None, net_flag='vgg'):
             train_cost_time_mean.append(cost_time)
             if epoch % CFG.TRAIN.DISPLAY_STEP == 0:
                 print(
-                    'Epoch: {:d} mean_time= {:5f}s ' % (epoch + 1,  np.mean(train_cost_time_mean)))
+                    'Epoch: {:d} mean_time= {:5f}s '.format(epoch + 1,  np.mean(train_cost_time_mean)))
 
             if epoch % 500 == 0:
                 train_cost_time_mean.clear()
