@@ -63,7 +63,7 @@ def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size, save
     phase_tensor = tf.constant('test', tf.string)
 
     net = lanenet_merge_model.LaneNet()
-    binary_seg_ret, instance_seg_ret = net.inference(input_tensor, 'lanenet_loss')
+    binary_seg_ret, instance_seg_ret = net.test_inference(input_tensor, phase_tensor, 'lanenet_loss')
 
     initial_var = tf.global_variables()
     final_var = initial_var[:-1]

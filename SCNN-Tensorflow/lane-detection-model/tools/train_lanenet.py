@@ -9,20 +9,15 @@
 训练lanenet模型
 """
 import argparse
-import math
 import os
 import os.path as ops
 import time
 
-import cv2
 import glog as log
 import numpy as np
 import tensorflow as tf
 
-try:
-    from cv2 import cv2
-except ImportError:
-    pass
+import sys
 
 from config import global_config
 from lanenet_model import lanenet_merge_model
@@ -93,7 +88,6 @@ def forward(batch_queue, net, phase, scope, optimizer=None):
     # calculate the accuracy
     out_logits = tf.nn.softmax(logits=out_logits)
     out_logits_out = tf.argmax(out_logits, axis=-1)
-    out_logits_out = tf.reshape(out_logits_out, tf.shape(label_instance_batch))
 
     pred_0 = tf.count_nonzero(tf.multiply(tf.cast(tf.equal(label_instance_batch, 0), tf.int32),
                                           tf.cast(tf.equal(out_logits_out, 0), tf.int32)),
@@ -113,7 +107,10 @@ def forward(batch_queue, net, phase, scope, optimizer=None):
     gt_all = tf.count_nonzero(tf.cast(tf.greater(label_instance_batch, 0), tf.int32), dtype=tf.int32)
     gt_back = tf.count_nonzero(tf.cast(tf.equal(label_instance_batch, 0), tf.int32), dtype=tf.int32)
 
-    pred_all = tf.add(tf.add(tf.add(pred_1, pred_2), pred_3), pred_4)
+    pred_total = tf.count_nonzero(tf.cast(tf.greater(out_logits_out, 0), tf.int32), dtype=tf.int32)
+    print_op = tf.print(pred_1, pred_2, pred_3, pred_4, gt_all, pred_total)
+    with tf.control_dependencies([print_op]):
+        pred_all = tf.add(tf.add(tf.add(pred_1, pred_2), pred_3), pred_4)
 
     accuracy = tf.divide(tf.cast(pred_all, tf.float32), tf.cast(gt_all, tf.float32))
     accuracy_back = tf.divide(tf.cast(pred_0, tf.float32), tf.cast(gt_back, tf.float32))
@@ -182,10 +179,7 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
     learning_rate = tf.train.polynomial_decay(CFG.TRAIN.LEARNING_RATE, global_step,
                                               CFG.TRAIN.EPOCHS, power=0.9)
 
-    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    with tf.control_dependencies(update_ops):
-        optimizer = tf.train.MomentumOptimizer(learning_rate=
-                                               learning_rate, momentum=0.9)
+    optimizer = tf.train.MomentumOptimizer(learning_rate=learning_rate, momentum=0.9)
     img, label_instance, label_existence = train_dataset.next_batch(CFG.TRAIN.BATCH_SIZE)
     batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
         [img, label_instance, label_existence], capacity=2 * CFG.TRAIN.GPU_NUM, num_threads=CFG.TRAIN.CPU_NUM)
@@ -258,7 +252,7 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
         for epoch in range(CFG.TRAIN.EPOCHS):
             t_start = time.time()
 
-            _, c, train_accuracy, train_accuracy_back, train_instance_loss, train_existence_loss, binary_seg_img = \
+            _, c, train_accuracy, train_accuracy_back, train_instance_loss, train_existence_loss, _ = \
                 sess.run([train_op, total_loss, accuracy, accuracy_back, instance_loss, existence_loss, out_logits_out],
                          feed_dict={phase: 'train'})
 
