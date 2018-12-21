@@ -30,7 +30,6 @@ class DataSet(object):
         :param dataset_info_file:
         """
         self._gt_img_list = self._init_dataset(dataset_info_file)
-        self._random_dataset()
         self._next_batch_loop_count = 0
 
     def _init_dataset(self, dataset_info_file):
@@ -84,6 +83,7 @@ class DataSet(object):
 
             for gt_img_path in gt_img_list:
                 gt_imgs.append(cv2.imread(gt_img_path, cv2.IMREAD_COLOR))
+                print(gt_img_path)
 
 
             self._next_batch_loop_count += 1

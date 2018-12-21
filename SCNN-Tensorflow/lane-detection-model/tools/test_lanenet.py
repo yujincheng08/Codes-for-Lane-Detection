@@ -49,9 +49,8 @@ def init_args():
     return parser.parse_args()
 
 
-def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size):
+def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size, save_dir):
     """
-
     :param image_path:
     :param weights_path:
     :param use_gpu:
@@ -60,11 +59,11 @@ def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size):
 
     test_dataset = lanenet_data_processor_test.DataSet(image_path)
 
-    input_tensor = tf.placeholder(dtype=tf.float32, shape=[batch_size, 288, 800, 3], name='input_tensor')
+    input_tensor = tf.placeholder(dtype=tf.float32, shape=[batch_size, CFG.TRAIN.IMG_HEIGHT, CFG.TRAIN.IMG_WIDTH, 3], name='input_tensor')
     phase_tensor = tf.constant('test', tf.string)
 
     net = lanenet_merge_model.LaneNet(phase=phase_tensor, net_flag='vgg')
-    binary_seg_ret, instance_seg_ret = net.inference(input_tensor=input_tensor, name='lanenet_loss')
+    binary_seg_ret, instance_seg_ret = net.inference(input_tensor, 'lanenet_loss')
 
     initial_var = tf.global_variables()
     final_var = initial_var[:-1]
@@ -89,7 +88,7 @@ def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size):
         saver.restore(sess=sess, save_path=weights_path)
         for i in range(int(len(image_list) / batch_size)):
             print(i)
-            gt_imgs = test_dataset.next_batch(CFG.TRAIN.BATCH_SIZE)
+            gt_imgs = test_dataset.next_batch(batch_size)
             gt_imgs = [cv2.resize(tmp,
                                   dsize=(CFG.TRAIN.IMG_WIDTH, CFG.TRAIN.IMG_HEIGHT),
                                   dst=tmp,
@@ -102,13 +101,14 @@ def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size):
 
             for cnt in range(batch_size):
                 image_name = image_list[i * batch_size + cnt]
-                image_prefix = image_name[:-10]
-                directory = 'predicts_SCNN_test_final/vgg_SCNN_DULR_w9' + image_prefix
+                parent_path = os.path.dirname(image_name)[1:]
+                directory = os.path.join(save_dir, 'vgg_SCNN_DULR_w9', parent_path )
                 if not os.path.exists(directory):
                     os.makedirs(directory)
-                file_exist = open(directory + image_name[-10:-4] + '.exist.txt', 'w')
+                file_exist = open(os.path.join(directory, os.path.basename(image_name)[:-3] + 'exist.txt'), 'w')
                 for cnt_img in range(4):
-                    cv2.imwrite(directory + image_name[-10:-4] + '_' + str(cnt_img + 1) + '_avg.png', (instance_seg_image[cnt, :, :, cnt_img + 1] * 255).astype(int) )                  
+                    cv2.imwrite(os.path.join(directory, os.path.basename(image_name)[:-4] + '_' + str(cnt_img + 1) + '_avg.png'),
+                            (instance_seg_image[cnt, :, :, cnt_img + 1] * 255).astype(int) )                  
                     if existence_output[cnt, cnt_img] > 0.5:
                         file_exist.write('1 ')
                     else:
@@ -129,9 +129,13 @@ if __name__ == '__main__':
         log.error('{:s} not exist and has been made'.format(args.save_dir))
         os.makedirs(args.save_dir)
 
+    save_dir = os.path.join(args.image_path, 'predicts')
+    if args.save_dir is not None:
+        save_dir = args.save_dir
+
     img_name = []
     with open(str(args.image_path), 'r') as g:
         for line in g.readlines():
             img_name.append(line.strip())
 
-    test_lanenet(args.image_path, args.weights_path, args.use_gpu, img_name, args.batch_size)
+    test_lanenet(args.image_path, args.weights_path, args.use_gpu, img_name, args.batch_size, save_dir)
