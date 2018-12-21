@@ -83,7 +83,7 @@ def average_gradients(tower_grads):
 
 def forward(batch_queue, net, phase, scope, optimizer=None):
     img_batch, label_instance_batch, label_existence_batch = batch_queue.dequeue()
-    inference = net.inference(img_batch, phase, 'inference')
+    inference = net.inference(img_batch, phase, 'lanenet_loss')
     _ = net.loss(inference, label_instance_batch, label_existence_batch, 'lanenet_loss')
     total_loss = tf.add_n(tf.get_collection('total_loss', scope))
     instance_loss = tf.add_n(tf.get_collection('instance_seg_loss', scope))
