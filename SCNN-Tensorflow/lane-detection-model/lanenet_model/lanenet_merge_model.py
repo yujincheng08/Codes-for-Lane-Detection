@@ -23,20 +23,25 @@ class LaneNet(cnn_basenet.CNNBaseModel):
     """
 
     @staticmethod
-    def inference(input_tensor, phase):
+    def inference(input_tensor, phase, name):
         """
         feed forward
+        :param name:
         :param input_tensor:
         :param phase:
         :return:
         """
-        encoder = vgg_encoder.VGG16Encoder(phase=phase)
-        encode_ret = encoder.encode(input_tensor=input_tensor)
-        return encode_ret
+        with tf.variable_scope(name):
+            with tf.variable_scope('inference'):
+                encoder = vgg_encoder.VGG16Encoder(phase=phase)
+                encode_ret = encoder.encode(input_tensor=input_tensor, name='encode')
+
+            return encode_ret
 
     @staticmethod
-    def loss(inference, binary_label, existence_label):
+    def loss(inference, binary_label, existence_label, name):
         """
+        :param name:
         :param inference:
         :param existence_label:
         :param binary_label:
@@ -44,34 +49,36 @@ class LaneNet(cnn_basenet.CNNBaseModel):
         """
         # feed forward to obtain logits
 
-        inference_ret = inference
+        with tf.variable_scope(name):
 
-        # Compute the segmentation loss
+            inference_ret = inference
 
-        decode_logits = inference_ret['prob_output']
-        decode_logits_reshape = tf.reshape(
-            decode_logits,
-            shape=[decode_logits.get_shape().as_list()[0],
-                   decode_logits.get_shape().as_list()[1] * decode_logits.get_shape().as_list()[2],
-                   decode_logits.get_shape().as_list()[3]])
+            # Compute the segmentation loss
 
-        binary_label_reshape = tf.reshape(
-            binary_label,
-            shape=[binary_label.get_shape().as_list()[0],
-                   binary_label.get_shape().as_list()[1] * binary_label.get_shape().as_list()[2]])
-        binary_label_reshape = tf.one_hot(binary_label_reshape, depth=5)
-        class_weights = tf.constant([[0.4, 1.0, 1.0, 1.0, 1.0]])
-        weights_loss = tf.reduce_sum(tf.multiply(binary_label_reshape, class_weights), 2)
-        binary_segmentation_loss = tf.losses.softmax_cross_entropy(onehot_labels=binary_label_reshape,
-                                                                   logits=decode_logits_reshape,
-                                                                   weights=weights_loss)
-        binary_segmentation_loss = tf.reduce_mean(binary_segmentation_loss)
+            decode_logits = inference_ret['prob_output']
+            decode_logits_reshape = tf.reshape(
+                decode_logits,
+                shape=[decode_logits.get_shape().as_list()[0],
+                       decode_logits.get_shape().as_list()[1] * decode_logits.get_shape().as_list()[2],
+                       decode_logits.get_shape().as_list()[3]])
 
-        # Compute the sigmoid loss
+            binary_label_reshape = tf.reshape(
+                binary_label,
+                shape=[binary_label.get_shape().as_list()[0],
+                       binary_label.get_shape().as_list()[1] * binary_label.get_shape().as_list()[2]])
+            binary_label_reshape = tf.one_hot(binary_label_reshape, depth=5)
+            class_weights = tf.constant([[0.4, 1.0, 1.0, 1.0, 1.0]])
+            weights_loss = tf.reduce_sum(tf.multiply(binary_label_reshape, class_weights), 2)
+            binary_segmentation_loss = tf.losses.softmax_cross_entropy(onehot_labels=binary_label_reshape,
+                                                                       logits=decode_logits_reshape,
+                                                                       weights=weights_loss)
+            binary_segmentation_loss = tf.reduce_mean(binary_segmentation_loss)
 
-        existence_logits = inference_ret['existence_output']
-        existence_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=existence_label, logits=existence_logits)
-        existence_loss = tf.reduce_mean(existence_loss)
+            # Compute the sigmoid loss
+
+            existence_logits = inference_ret['existence_output']
+            existence_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=existence_label, logits=existence_logits)
+            existence_loss = tf.reduce_mean(existence_loss)
 
         # Compute the overall loss
 
@@ -83,5 +90,11 @@ class LaneNet(cnn_basenet.CNNBaseModel):
             'existence_logits': existence_logits,
             'existence_pre_loss': existence_loss
         }
+
+        tf.add_to_collection('total_loss', total_loss)
+        tf.add_to_collection('instance_seg_logits', decode_logits)
+        tf.add_to_collection('instance_seg_loss', binary_segmentation_loss)
+        tf.add_to_collection('existence_logits', existence_logits)
+        tf.add_to_collection('existence_pre_loss', existence_loss)
 
         return ret

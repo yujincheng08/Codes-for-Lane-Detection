@@ -81,21 +81,16 @@ def average_gradients(tower_grads):
     return average_grads
 
 
-def forward(batch_queue, net, phase, optimizer=None):
+def forward(batch_queue, net, phase, scope, optimizer=None):
     img_batch, label_instance_batch, label_existence_batch = batch_queue.dequeue()
-    inference = net.inference(img_batch, phase)
-    compute_ret = net.loss(inference, label_instance_batch, label_existence_batch)
-    total_loss = compute_ret['total_loss']
-    tf.get_variable_scope().reuse_variables()
-    if optimizer is not None:
-        grads = optimizer.compute_gradients(total_loss)
-    else:
-        grads = None
-    instance_loss = compute_ret['instance_seg_loss']
-    existence_loss = compute_ret['existence_pre_loss']
+    inference = net.inference(img_batch, phase, 'inference')
+    _ = net.loss(inference, label_instance_batch, label_existence_batch, 'lanenet_loss')
+    total_loss = tf.add_n(tf.get_collection('total_loss', scope))
+    instance_loss = tf.add_n(tf.get_collection('instance_seg_loss', scope))
+    existence_loss = tf.add_n(tf.get_collection('existence_pre_loss', scope))
 
+    out_logits = tf.add_n(tf.get_collection('instance_seg_logits', scope))
     # calculate the accuracy
-    out_logits = compute_ret['instance_seg_logits']
     out_logits = tf.nn.softmax(logits=out_logits)
     out_logits_out = tf.argmax(out_logits, axis=-1)
     out_logits_out = tf.reshape(out_logits_out, tf.shape(label_instance_batch))
@@ -157,6 +152,13 @@ def forward(batch_queue, net, phase, optimizer=None):
     IoU_4 = tf.divide(tf.cast(overlap_4, tf.float32), tf.cast(union_4, tf.float32))
 
     IoU = tf.reduce_mean(tf.stack([IoU_1, IoU_2, IoU_3, IoU_4]))
+
+    tf.get_variable_scope().reuse_variables()
+
+    if optimizer is not None:
+        grads = optimizer.compute_gradients(total_loss)
+    else:
+        grads = None
     return total_loss, instance_loss, existence_loss, accuracy, accuracy_back, IoU, out_logits_out, grads
 
 
@@ -195,12 +197,12 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
     with tf.variable_scope(tf.get_variable_scope()):
         for i in range(CFG.TRAIN.GPU_NUM):
             with tf.device('/gpu:%d' % i):
-                with tf.name_scope('tower_%d' % i):
+                with tf.name_scope('tower_%d' % i) as scope:
                     total_loss, instance_loss, existence_loss, accuracy, accuracy_back, _, out_logits_out, \
-                        grad = forward(batch_queue, net, phase, optimizer)
+                        grad = forward(batch_queue, net, phase, scope, optimizer)
                     tower_grads.append(grad)
                     val_op_total_loss, val_op_instance_loss, val_op_existence_loss, val_op_accuracy, \
-                        val_op_accuracy_back, val_op_IoU, _, _ = forward(val_batch_queue, net, phase)
+                        val_op_accuracy_back, val_op_IoU, _, _ = forward(val_batch_queue, net, phase, scope)
 
     grads = average_gradients(tower_grads)
 
