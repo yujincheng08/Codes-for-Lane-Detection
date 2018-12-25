@@ -32,9 +32,6 @@ class DataSet(object):
     def __len__(self):
         return self._len
 
-    def distorted_inputs(self):
-        pass
-
     @staticmethod
     def process_img(img_queue):
         img_raw = tf.read_file(img_queue)

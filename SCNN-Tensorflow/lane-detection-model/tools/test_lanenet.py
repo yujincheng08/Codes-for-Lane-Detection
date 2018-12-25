@@ -57,13 +57,17 @@ def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size, save
     :return:
     """
 
-    test_dataset = lanenet_data_processor_test.DataSet(image_path)
-
-    input_tensor = tf.placeholder(dtype=tf.float32, shape=[batch_size, CFG.TRAIN.IMG_HEIGHT, CFG.TRAIN.IMG_WIDTH, 3], name='input_tensor')
+    test_dataset = lanenet_data_processor_test.DataSet(image_path, batch_size)
+    input_tensor = tf.placeholder(dtype=tf.string, shape=[batch_size], name='input_tensor')
+    imgs = []
+    for i in range(batch_size):
+        imgs.append(test_dataset.process_img(input_tensor[i]))
     phase_tensor = tf.constant('test', tf.string)
 
+    imgs = tf.convert_to_tensor(imgs)
+
     net = lanenet_merge_model.LaneNet()
-    binary_seg_ret, instance_seg_ret = net.test_inference(input_tensor, phase_tensor, 'lanenet_loss')
+    binary_seg_ret, instance_seg_ret = net.test_inference(imgs, phase_tensor, 'lanenet_loss')
 
     initial_var = tf.global_variables()
     final_var = initial_var[:-1]
@@ -88,27 +92,21 @@ def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size, save
         saver.restore(sess=sess, save_path=weights_path)
         for i in range(int(len(image_list) / batch_size)):
             print(i)
-            gt_imgs = test_dataset.next_batch(batch_size)
-            gt_imgs = [cv2.resize(tmp,
-                                  dsize=(CFG.TRAIN.IMG_WIDTH, CFG.TRAIN.IMG_HEIGHT),
-                                  dst=tmp,
-                                  interpolation=cv2.INTER_CUBIC)
-                       for tmp in gt_imgs]
-            gt_imgs = [(tmp - VGG_MEAN) for tmp in gt_imgs]
-
+            paths = test_dataset.next_batch()
             instance_seg_image, existence_output = sess.run([binary_seg_ret, instance_seg_ret],
-                                                        feed_dict={input_tensor: gt_imgs})
+                                                            feed_dict={input_tensor: paths})
 
             for cnt in range(batch_size):
-                image_name = image_list[i * batch_size + cnt]
-                parent_path = os.path.dirname(image_name)[1:]
-                directory = os.path.join(save_dir, 'vgg_SCNN_DULR_w9', parent_path )
+                image_name = paths[cnt]
+                print(image_name)
+                parent_path = os.path.dirname(image_name)
+                directory = os.path.join(save_dir, 'vgg_SCNN_DULR_w9', parent_path)
                 if not os.path.exists(directory):
                     os.makedirs(directory)
                 file_exist = open(os.path.join(directory, os.path.basename(image_name)[:-3] + 'exist.txt'), 'w')
                 for cnt_img in range(4):
                     cv2.imwrite(os.path.join(directory, os.path.basename(image_name)[:-4] + '_' + str(cnt_img + 1) + '_avg.png'),
-                            (instance_seg_image[cnt, :, :, cnt_img + 1] * 255).astype(int) )                  
+                            (instance_seg_image[cnt, :, :, cnt_img + 1] * 255).astype(int))
                     if existence_output[cnt, cnt_img] > 0.5:
                         file_exist.write('1 ')
                     else:

@@ -107,10 +107,7 @@ def forward(batch_queue, net, phase, scope, optimizer=None):
     gt_all = tf.count_nonzero(tf.cast(tf.greater(label_instance_batch, 0), tf.int32), dtype=tf.int32)
     gt_back = tf.count_nonzero(tf.cast(tf.equal(label_instance_batch, 0), tf.int32), dtype=tf.int32)
 
-    pred_total = tf.count_nonzero(tf.cast(tf.greater(out_logits_out, 0), tf.int32), dtype=tf.int32)
-    print_op = tf.print(pred_1, pred_2, pred_3, pred_4, gt_all, pred_total)
-    with tf.control_dependencies([print_op]):
-        pred_all = tf.add(tf.add(tf.add(pred_1, pred_2), pred_3), pred_4)
+    pred_all = tf.add(tf.add(tf.add(pred_1, pred_2), pred_3), pred_4)
 
     accuracy = tf.divide(tf.cast(pred_all, tf.float32), tf.cast(gt_all, tf.float32))
     accuracy_back = tf.divide(tf.cast(pred_0, tf.float32), tf.cast(gt_back, tf.float32))
@@ -184,7 +181,7 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
     batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
         [img, label_instance, label_existence], capacity=2 * CFG.TRAIN.GPU_NUM, num_threads=CFG.TRAIN.CPU_NUM)
 
-    val_img, val_label_instance, val_label_existence = val_dataset.next_batch(CFG.TRAIN.BATCH_SIZE)
+    val_img, val_label_instance, val_label_existence = val_dataset.next_batch(CFG.TRAIN.VAL_BATCH_SIZE)
     val_batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
         [val_img, val_label_instance, val_label_existence], capacity=2 * CFG.TRAIN.GPU_NUM,
         num_threads=CFG.TRAIN.CPU_NUM)
@@ -254,7 +251,7 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
 
             _, c, train_accuracy, train_accuracy_back, train_instance_loss, train_existence_loss, _ = \
                 sess.run([train_op, total_loss, accuracy, accuracy_back, instance_loss, existence_loss, out_logits_out],
-                         feed_dict={phase: 'train'})
+                         feed_dict={phase: 'test'})
 
             cost_time = time.time() - t_start
             train_cost_time_mean.append(cost_time)
