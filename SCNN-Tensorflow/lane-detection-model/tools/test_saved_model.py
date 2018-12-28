@@ -47,8 +47,6 @@ def test_lanenet(image_path, model_path, use_gpu, image_list, batch_size, save_d
     :return:
     """
     test_dataset = lanenet_data_processor_test.DataSet(image_path, batch_size)
-    input_tensor = tf.placeholder(dtype=tf.string, shape=[None], name='input_tensor')
-    imgs = tf.map_fn(test_dataset.process_img, input_tensor, dtype=tf.float32)
 
     # Set sess configuration
     if use_gpu:
@@ -62,41 +60,20 @@ def test_lanenet(image_path, model_path, use_gpu, image_list, batch_size, save_d
     sess = tf.Session(config=sess_config)
 
     with sess.as_default():
-        with gfile.FastGFile(model_path, 'rb') as f:
-            graph_def = tf.GraphDef()
-            graph_def.ParseFromString(f.read())
-            sess.graph.as_default()
-            tf.import_graph_def(graph_def, name='')
+        meta = tf.saved_model.loader.load(sess, ["serve"], model_path)
 
         model_input = sess.graph.get_tensor_by_name('img_input:0')
-        binary_seg = sess.graph.get_tensor_by_name('binary_seg:0')
-        instance_seg = sess.graph.get_tensor_by_name('instance_seg:0')
+        # binary_seg = sess.graph.get_tensor_by_name('binary_seg:0')
+        instance_seg = sess.graph.get_tensor_by_name('Greater:0')
+        binary_seg_1 = sess.graph.get_tensor_by_name('strided_slice_1:0')
         sess.run(tf.global_variables_initializer())
 
         for i in range(math.ceil(len(image_list) / batch_size)):
             print(i)
             paths = test_dataset.next_batch()
-            imgs_out = sess.run(imgs, feed_dict={input_tensor: paths})
-            instance_seg_image, existence_output = sess.run([binary_seg, instance_seg],
-                                                            feed_dict={model_input: imgs_out})
-            for cnt, image_name in enumerate(paths):
-                print(image_name)
-                parent_path = os.path.dirname(image_name)
-                directory = os.path.join(save_dir, 'vgg_SCNN_DULR_w9', parent_path)
-                if not os.path.exists(directory):
-                    os.makedirs(directory)
-                file_exist = open(os.path.join(directory, os.path.basename(image_name)[:-3] + 'exist.txt'), 'w')
-                for cnt_img in range(4):
-                    cv2.imwrite(os.path.join(directory,
-                                             os.path.basename(image_name)[:-4] + '_' + str(cnt_img + 1) + '_avg.png'),
-                                (instance_seg_image[cnt, :, :, cnt_img + 1] * 255).astype(int))
-                    if existence_output[cnt, cnt_img] > 0.5:
-                        file_exist.write('1 ')
-                    else:
-                        file_exist.write('0 ')
-
-                file_exist.close()
-
+            imgs = [cv2.imread(path) for path in paths]
+            existence_output, binary_seg_out_1 = sess.run([instance_seg, binary_seg_1], feed_dict={model_input: imgs})
+            print(existence_output)
     sess.close()
 
     return

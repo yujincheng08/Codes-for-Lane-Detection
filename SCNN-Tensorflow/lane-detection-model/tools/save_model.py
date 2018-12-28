@@ -2,7 +2,10 @@ from lanenet_model import lanenet_merge_model
 
 import tensorflow as tf
 from tensorflow.python.framework import graph_util
-from tensorflow.python.tools import optimize_for_inference_lib
+from tensorflow.python.saved_model import signature_constants
+from tensorflow.python.saved_model import signature_def_utils
+from tensorflow.python.saved_model import utils
+
 import argparse
 import os
 
@@ -23,8 +26,15 @@ def save_model(args):
     sess_config = tf.ConfigProto(device_count={'GPU': 0})
     with tf.Session(graph=tf.Graph(), config=sess_config) as sess:
 
-        input_tensor = tf.placeholder(dtype=tf.float32, shape=[None, CFG.TRAIN.IMG_HEIGHT, CFG.TRAIN.IMG_WIDTH, 3],
-                                      name='img_input')
+        img_input = tf.placeholder(dtype=tf.uint8, shape=[None, 1200, 1920, 3],
+                                   name='img_input')
+
+        img_float = tf.cast(img_input, tf.float32)
+        resized_image = tf.image.resize_bicubic(img_input, (CFG.TRAIN.IMG_HEIGHT, CFG.TRAIN.IMG_WIDTH))
+
+        std_image = tf.map_fn(lambda img: tf.subtract(img, [103.939, 116.779, 123.68]), resized_image)
+
+        input_tensor = tf.map_fn(lambda img: img[..., ::-1], std_image)
 
         phase = tf.constant('test', tf.string)
 
@@ -39,26 +49,23 @@ def save_model(args):
 
         saver.restore(sess=sess, save_path=args.weights_path)
 
-        tf.identity(binary_seg_ret, 'binary_seg')
-        tf.identity(instance_seg_ret, 'instance_seg')
-        # fix batch norm nodes
-        gd = sess.graph.as_graph_def()
-        for node in gd.node:
-            if node.op == 'RefSwitch':
-                node.op = 'Switch'
-                for index in range(len(node.input)):
-                    if 'moving_' in node.input[index]:
-                        node.input[index] = node.input[index] + '/read'
-            elif node.op == 'AssignSub':
-                node.op = 'Sub'
-                if 'use_locking' in node.attr: del node.attr['use_locking']
+        instance_seg = tf.greater(instance_seg_ret, 0.5)
+        instance_seg_info = utils.build_tensor_info(instance_seg)
+        outputs = {'instance_seg': instance_seg_info}
 
-        constant_graph = graph_util.convert_variables_to_constants(sess, gd,
-                                                                   ['binary_seg', 'instance_seg'])
+        for i in range(5):
+            outputs['binary_seg_%d' % i] = utils.build_tensor_info(binary_seg_ret[:, :, :, i])
 
-        os.makedirs(args.save_dir, exist_ok=True)
-        with tf.gfile.FastGFile(os.path.join(args.save_dir, 'model.pb'), mode='wb') as f:
-            f.write(constant_graph.SerializeToString())
+        img_input_info = utils.build_tensor_info(img_input)
+        output_signature = signature_def_utils.build_signature_def(
+            inputs={'img_input': img_input_info},
+            outputs=outputs,
+            method_name=signature_constants.PREDICT_METHOD_NAME)
+
+        builder = tf.saved_model.builder.SavedModelBuilder(os.path.join(args.save_dir, 'savemodel'))
+        builder.add_meta_graph_and_variables(sess, ['serve'], signature_def_map={'detect': output_signature})
+
+    builder.save()
 
 
 if __name__ == '__main__':
