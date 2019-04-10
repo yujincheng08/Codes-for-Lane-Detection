@@ -168,7 +168,7 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
             conv_4_3 = self._conv_stage(input_tensor=conv_4_2, k_size=3,
                                         out_dims=512, name='conv4_3')
 
-            ### add dilated convolution ###
+            # add dilated convolution #
 
             # conv stage 5_1
             conv_5_1 = self._conv_dilated_stage(input_tensor=conv_4_3, k_size=3,
@@ -192,46 +192,47 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
             conv_5_5 = self._conv_stage(input_tensor=conv_5_4, k_size=1,
                                         out_dims=128, name='conv5_5')  # 8 x 36 x 100 x 128
 
+            top_hidden = conv_5_5  # alias
+
             # add message passing #
 
             # top to down #
 
             feature_list_old = []
-            feature_list_new = []
-            for cnt in range(conv_5_5.get_shape().as_list()[1]):
-                feature_list_old.append(tf.expand_dims(conv_5_5[:, cnt, :, :], axis=1))
-            feature_list_new.append(tf.expand_dims(conv_5_5[:, 0, :, :], axis=1))
+
+            length = int(CFG.TRAIN.IMG_HEIGHT / 8)
+
+            tf.assert_equal(length, top_hidden.get_shape().as_list()[1])
+
+            for cnt in range(length):
+                feature_list_old.append(tf.expand_dims(top_hidden[:, cnt, :, :], axis=1))
+            feature_list_new = [feature_list_old[0]]
 
             w1 = tf.get_variable('W1', [1, 9, 128, 128],
                                  initializer=tf.random_normal_initializer(0, math.sqrt(2.0 / (9 * 128 * 128 * 5))))
-            with tf.variable_scope("convs_6_1"):
-                conv_6_1 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_old[0], w1, [1, 1, 1, 1], 'SAME')),
-                                  feature_list_old[1])
-                feature_list_new.append(conv_6_1)
 
-            for cnt in range(2, conv_5_5.get_shape().as_list()[1]):
+            for cnt in range(1, length):
                 with tf.variable_scope("convs_6_1", reuse=True):
-                    conv_6_1 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_new[cnt - 1], w1, [1, 1, 1, 1], 'SAME')),
+                    conv_6_1 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_new[-1], w1, [1, 1, 1, 1], 'SAME')),
                                       feature_list_old[cnt])
                     feature_list_new.append(conv_6_1)
 
             # down to top #
             feature_list_old = feature_list_new
-            feature_list_new = []
-            length = int(CFG.TRAIN.IMG_HEIGHT / 8) - 1
-            feature_list_new.append(feature_list_old[length])
+            feature_list_new = [feature_list_old[-1]]
 
             w2 = tf.get_variable('W2', [1, 9, 128, 128],
                                  initializer=tf.random_normal_initializer(0, math.sqrt(2.0 / (9 * 128 * 128 * 5))))
+
             with tf.variable_scope("convs_6_2"):
                 conv_6_2 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_old[length], w2, [1, 1, 1, 1], 'SAME')),
                                   feature_list_old[length - 1])
                 feature_list_new.append(conv_6_2)
 
-            for cnt in range(2, conv_5_5.get_shape().as_list()[1]):
+            for cnt in range(1, length):
                 with tf.variable_scope("convs_6_2", reuse=True):
-                    conv_6_2 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_new[cnt - 1], w2, [1, 1, 1, 1], 'SAME')),
-                                      feature_list_old[length - cnt])
+                    conv_6_2 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_new[-1], w2, [1, 1, 1, 1], 'SAME')),
+                                      feature_list_old[-cnt])
                     feature_list_new.append(conv_6_2)
 
             feature_list_new.reverse()
@@ -241,43 +242,40 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
 
             # left to right #
 
+            width = int(CFG.TRAIN.IMG_WIDTH / 8)
+            tf.assert_equal(length, top_hidden.get_shape().as_list()[2])
+
             feature_list_old = []
-            feature_list_new = []
-            for cnt in range(processed_feature.get_shape().as_list()[2]):
+            for cnt in range(width):
                 feature_list_old.append(tf.expand_dims(processed_feature[:, :, cnt, :], axis=2))
-            feature_list_new.append(tf.expand_dims(processed_feature[:, :, 0, :], axis=2))
+
+            feature_list_new = [feature_list_old[0]]
 
             w3 = tf.get_variable('W3', [9, 1, 128, 128],
                                  initializer=tf.random_normal_initializer(0, math.sqrt(2.0 / (9 * 128 * 128 * 5))))
-            with tf.variable_scope("convs_6_3"):
-                conv_6_3 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_old[0], w3, [1, 1, 1, 1], 'SAME')),
-                                  feature_list_old[1])
-                feature_list_new.append(conv_6_3)
 
-            for cnt in range(2, processed_feature.get_shape().as_list()[2]):
+            for cnt in range(1, width):
                 with tf.variable_scope("convs_6_3", reuse=True):
-                    conv_6_3 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_new[cnt - 1], w3, [1, 1, 1, 1], 'SAME')),
+                    conv_6_3 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_new[-1], w3, [1, 1, 1, 1], 'SAME')),
                                       feature_list_old[cnt])
                     feature_list_new.append(conv_6_3)
 
             # right to left #
 
             feature_list_old = feature_list_new
-            feature_list_new = []
-            length = int(CFG.TRAIN.IMG_WIDTH / 8) - 1
-            feature_list_new.append(feature_list_old[length])
+            feature_list_new = [feature_list_old[-1]]
 
             w4 = tf.get_variable('W4', [9, 1, 128, 128],
                                  initializer=tf.random_normal_initializer(0, math.sqrt(2.0 / (9 * 128 * 128 * 5))))
             with tf.variable_scope("convs_6_4"):
-                conv_6_4 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_old[length], w4, [1, 1, 1, 1], 'SAME')),
-                                  feature_list_old[length - 1])
+                conv_6_4 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_old[width], w4, [1, 1, 1, 1], 'SAME')),
+                                  feature_list_old[width - 1])
                 feature_list_new.append(conv_6_4)
 
-            for cnt in range(2, processed_feature.get_shape().as_list()[2]):
+            for cnt in range(1, width):
                 with tf.variable_scope("convs_6_4", reuse=True):
-                    conv_6_4 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_new[cnt - 1], w4, [1, 1, 1, 1], 'SAME')),
-                                      feature_list_old[length - cnt])
+                    conv_6_4 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_new[-1], w4, [1, 1, 1, 1], 'SAME')),
+                                      feature_list_old[-cnt])
                     feature_list_new.append(conv_6_4)
 
             feature_list_new.reverse()
@@ -294,7 +292,7 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
 
             ret['prob_output'] = tf.image.resize_images(conv_output, [CFG.TRAIN.IMG_HEIGHT, CFG.TRAIN.IMG_WIDTH])
 
-            ### add lane existence prediction branch ###
+            # add lane existence prediction branch #
 
             # spatial softmax #
             features = conv_output  # N x H x W x C
