@@ -164,8 +164,8 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
 
     phase = tf.placeholder(dtype=tf.string, shape=None, name='net_phase')
 
-    train_dataset = lanenet_data_processor.DataSet(train_dataset_file)
-    val_dataset = lanenet_data_processor.DataSet(val_dataset_file)
+    train_dataset = lanenet_data_processor.DataSet(dataset_dir, train_dataset_file)
+    val_dataset = lanenet_data_processor.DataSet(dataset_dir, val_dataset_file)
 
     net = lanenet_merge_model.LaneNet()
 
