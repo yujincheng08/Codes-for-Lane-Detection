@@ -198,11 +198,10 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
 
             # top to down #
 
-            feature_list_old = []
-
             length = int(CFG.TRAIN.IMG_HEIGHT / 8)
-
             tf.assert_equal(length, top_hidden.get_shape().as_list()[1])
+
+            feature_list_old = []
 
             for cnt in range(length):
                 feature_list_old.append(tf.expand_dims(top_hidden[:, cnt, :, :], axis=1))
@@ -217,17 +216,14 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
                                       feature_list_old[cnt])
                     feature_list_new.append(conv_6_1)
 
+            scnn_u = tf.squeeze(tf.stack(feature_list_new, axis=1), axis=2)
+
             # down to top #
-            feature_list_old = feature_list_new
+            # feature_list_old = feature_list_new  # use the top hidden
             feature_list_new = [feature_list_old[-1]]
 
             w2 = tf.get_variable('W2', [1, 9, 128, 128],
                                  initializer=tf.random_normal_initializer(0, math.sqrt(2.0 / (9 * 128 * 128 * 5))))
-
-            with tf.variable_scope("convs_6_2"):
-                conv_6_2 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_old[length], w2, [1, 1, 1, 1], 'SAME')),
-                                  feature_list_old[length - 1])
-                feature_list_new.append(conv_6_2)
 
             for cnt in range(1, length):
                 with tf.variable_scope("convs_6_2", reuse=True):
@@ -237,17 +233,17 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
 
             feature_list_new.reverse()
 
-            processed_feature = tf.stack(feature_list_new, axis=1)
-            processed_feature = tf.squeeze(processed_feature, axis=2)
+            scnn_d = tf.squeeze(tf.stack(feature_list_new, axis=1), axis=2)
 
             # left to right #
 
             width = int(CFG.TRAIN.IMG_WIDTH / 8)
-            tf.assert_equal(length, top_hidden.get_shape().as_list()[2])
+            tf.assert_equal(width, top_hidden.get_shape().as_list()[2])
 
             feature_list_old = []
+
             for cnt in range(width):
-                feature_list_old.append(tf.expand_dims(processed_feature[:, :, cnt, :], axis=2))
+                feature_list_old.append(tf.expand_dims(top_hidden[:, :, cnt, :], axis=2)) # use top hidden
 
             feature_list_new = [feature_list_old[0]]
 
@@ -260,17 +256,15 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
                                       feature_list_old[cnt])
                     feature_list_new.append(conv_6_3)
 
+            scnn_l = tf.squeeze(tf.stack(feature_list_new, axis=2), axis=3)
+
             # right to left #
 
-            feature_list_old = feature_list_new
+            # feature_list_old = feature_list_new  # use the old one
             feature_list_new = [feature_list_old[-1]]
 
             w4 = tf.get_variable('W4', [9, 1, 128, 128],
                                  initializer=tf.random_normal_initializer(0, math.sqrt(2.0 / (9 * 128 * 128 * 5))))
-            with tf.variable_scope("convs_6_4"):
-                conv_6_4 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_old[width], w4, [1, 1, 1, 1], 'SAME')),
-                                  feature_list_old[width - 1])
-                feature_list_new.append(conv_6_4)
 
             for cnt in range(1, width):
                 with tf.variable_scope("convs_6_4", reuse=True):
@@ -279,8 +273,14 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
                     feature_list_new.append(conv_6_4)
 
             feature_list_new.reverse()
-            processed_feature = tf.stack(feature_list_new, axis=2)
-            processed_feature = tf.squeeze(processed_feature, axis=3)
+
+            scnn_r = tf.squeeze(tf.stack(feature_list_new, axis=2), axis=3)
+
+            w = tf.get_variable('W', [4], initializer=tf.constant_initializer(0.25))
+
+            processed_feature = tf.scalar_mul(1 / tf.reduce_sum(w),
+                                              tf.add_n([tf.scalar_mul(w[0], scnn_u), tf.scalar_mul(w[1], scnn_d),
+                                                        tf.scalar_mul(w[2], scnn_l), tf.scalar_mul(w[3], scnn_r)]))
 
             #######################
 
