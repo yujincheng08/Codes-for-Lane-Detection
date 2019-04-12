@@ -246,7 +246,8 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
                             sess.run(_op)
                         except Exception as e:
                             continue
-        tf.train.start_queue_runners(sess=sess)
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess, coord)
         for epoch in range(CFG.TRAIN.EPOCHS):
             t_start = time.time()
 
@@ -325,6 +326,9 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
             val_accuracy_mean.clear()
             val_accuracy_back_mean.clear()
             val_IoU_mean.clear()
+
+        coord.request_stop()
+        coord.join(threads)
 
 
 if __name__ == '__main__':
