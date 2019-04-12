@@ -45,7 +45,6 @@ def init_args():
     return parser.parse_args()
 
 
-
 def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size, save_dir):
 
     """
@@ -54,8 +53,8 @@ def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size, save
     :param use_gpu:
     :return:
     """
-    
-    test_dataset = lanenet_data_processor_test.DataSet(image_path, batch_size)
+    list_path = ops.join(image_path, "test.txt")
+    test_dataset = lanenet_data_processor_test.DataSet(image_path, list_path, batch_size)
     input_tensor = tf.placeholder(dtype=tf.string, shape=[None], name='input_tensor')
     imgs = tf.map_fn(test_dataset.process_img, input_tensor, dtype=tf.float32)
     phase_tensor = tf.constant('test', tf.string)
