@@ -9,6 +9,7 @@
 实现LaneNet的数据解析类
 """
 import tensorflow as tf
+import os.path as ops
 
 from config import global_config
 
@@ -21,11 +22,12 @@ class DataSet(object):
     实现数据集类
     """
 
-    def __init__(self, dataset_info_file, batch_size):
+    def __init__(self, dataset_dir, dataset_info_file, batch_size):
         """
 
         :param dataset_info_file:
         """
+        self.dataset_dir = dataset_dir
         self._dataset_info_file = dataset_info_file
         self._batch_size = batch_size
         self._img_list = self._init_dataset()
@@ -46,7 +48,7 @@ class DataSet(object):
         with open(self._dataset_info_file, 'r') as file:
             for _info in file:
                 info_tmp = _info.strip(' ').split()
-                img_list.append(info_tmp[0][1:])
+                img_list.append(ops.join(self.dataset_dir, info_tmp[0][1:]))
 
         self._len = len(img_list)
 

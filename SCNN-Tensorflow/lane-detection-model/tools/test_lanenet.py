@@ -45,8 +45,7 @@ def init_args():
     return parser.parse_args()
 
 
-
-def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size, save_dir):
+def test_lanenet(image_path, weights_path, use_gpu, batch_size, save_dir):
 
     """
     :param image_path:
@@ -54,8 +53,8 @@ def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size, save
     :param use_gpu:
     :return:
     """
-    
-    test_dataset = lanenet_data_processor_test.DataSet(image_path, batch_size)
+    list_path = ops.join(image_path, "test.txt")
+    test_dataset = lanenet_data_processor_test.DataSet(image_path, list_path, batch_size)
     input_tensor = tf.placeholder(dtype=tf.string, shape=[None], name='input_tensor')
     imgs = tf.map_fn(test_dataset.process_img, input_tensor, dtype=tf.float32)
     phase_tensor = tf.constant('test', tf.string)
@@ -77,7 +76,7 @@ def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size, save
     with sess.as_default():
         sess.run(tf.global_variables_initializer())
         saver.restore(sess=sess, save_path=weights_path)
-        for i in range(math.ceil(len(image_list) / batch_size)):
+        for i in range(math.ceil(len(test_dataset) / batch_size)):
             print(i)
             paths = test_dataset.next_batch()
             instance_seg_image, existence_output = sess.run([binary_seg_ret, instance_seg_ret],
@@ -113,9 +112,4 @@ if __name__ == '__main__':
     if args.save_dir is not None:
         save_dir = args.save_dir
 
-    img_name = []
-    with open(str(args.image_path), 'r') as g:
-        for line in g.readlines():
-            img_name.append(line.strip())
-
-    test_lanenet(args.image_path, args.weights_path, args.use_gpu, img_name, args.batch_size, save_dir)
+    test_lanenet(args.image_path, args.weights_path, args.use_gpu, args.batch_size, save_dir)
