@@ -13,6 +13,7 @@ import os.path as ops
 import argparse
 import math
 import tensorflow as tf
+import time
 import glog as log
 import cv2
 try:
@@ -45,7 +46,7 @@ def init_args():
     return parser.parse_args()
 
 
-def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size, save_dir):
+def test_lanenet(image_path, weights_path, use_gpu, batch_size, save_dir):
 
     """
     :param image_path:
@@ -76,11 +77,13 @@ def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size, save
     with sess.as_default():
         sess.run(tf.global_variables_initializer())
         saver.restore(sess=sess, save_path=weights_path)
-        for i in range(math.ceil(len(image_list) / batch_size)):
-            print(i)
+        for i in range(math.ceil(len(test_dataset) / batch_size)):
+            t_start_val = time.time()
             paths = test_dataset.next_batch()
             instance_seg_image, existence_output = sess.run([binary_seg_ret, instance_seg_ret],
                                                             feed_dict={input_tensor: paths})
+            cost_time_val = time.time() - t_start_val
+            print('epoch: {:d}, cost time: {:5f}s'.format(i, cost_time_val))
             for cnt, image_name in enumerate(paths):
                 print(image_name)
                 parent_path = os.path.dirname(image_name)
@@ -96,6 +99,7 @@ def test_lanenet(image_path, weights_path, use_gpu, image_list, batch_size, save
                     else:
                         file_exist.write('0 ')
                 file_exist.close()
+
     sess.close()
     return
 
@@ -112,9 +116,4 @@ if __name__ == '__main__':
     if args.save_dir is not None:
         save_dir = args.save_dir
 
-    img_name = []
-    with open(str(args.image_path), 'r') as g:
-        for line in g.readlines():
-            img_name.append(line.strip())
-
-    test_lanenet(args.image_path, args.weights_path, args.use_gpu, img_name, args.batch_size, save_dir)
+    test_lanenet(args.image_path, args.weights_path, args.use_gpu, args.batch_size, save_dir)
