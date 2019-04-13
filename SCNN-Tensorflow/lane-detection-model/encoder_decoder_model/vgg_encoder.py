@@ -216,7 +216,7 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
                                       feature_list_old[cnt])
                     feature_list_new.append(conv_6_1)
 
-            scnn_u = tf.squeeze(tf.stack(feature_list_new, axis=1), axis=2)
+            scnn_u = tf.concat(feature_list_new, axis=1)
 
             # down to top #
             # feature_list_old = feature_list_new  # use the top hidden
@@ -233,7 +233,7 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
 
             feature_list_new.reverse()
 
-            scnn_d = tf.squeeze(tf.stack(feature_list_new, axis=1), axis=2)
+            scnn_d = tf.concat(feature_list_new, axis=1)
 
             # left to right #
 
@@ -256,7 +256,7 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
                                       feature_list_old[cnt])
                     feature_list_new.append(conv_6_3)
 
-            scnn_l = tf.squeeze(tf.stack(feature_list_new, axis=2), axis=3)
+            scnn_l = tf.concat(feature_list_new, axis=2)
 
             # right to left #
 
@@ -274,13 +274,10 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
 
             feature_list_new.reverse()
 
-            scnn_r = tf.squeeze(tf.stack(feature_list_new, axis=2), axis=3)
+            scnn_r = tf.concat(feature_list_new, axis=2)
 
-            w = tf.get_variable('W', [4], initializer=tf.constant_initializer(0.25))
-
-            processed_feature = tf.scalar_mul(1 / tf.reduce_sum(w),
-                                              tf.add_n([tf.scalar_mul(w[0], scnn_u), tf.scalar_mul(w[1], scnn_d),
-                                                        tf.scalar_mul(w[2], scnn_l), tf.scalar_mul(w[3], scnn_r)]))
+            # processed_feature = tf.add_n([scnn_u, scnn_d, scnn_l, scnn_r])
+            processed_feature = tf.concat([scnn_u, scnn_d, scnn_l, scnn_r], axis=3)
 
             #######################
 
