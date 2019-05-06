@@ -248,6 +248,7 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
                             continue
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess, coord)
+        writer = tf.summary.FileWriter("/tmp/SCNN-Tensorflow/log", sess.graph)
         for epoch in range(CFG.TRAIN.EPOCHS):
             t_start = time.time()
 
@@ -327,6 +328,7 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
             val_accuracy_back_mean.clear()
             val_IoU_mean.clear()
 
+        writer.close()
         coord.request_stop()
         coord.join(threads)
 
