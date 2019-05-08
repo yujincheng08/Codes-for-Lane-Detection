@@ -231,21 +231,21 @@ def train_net(dataset_dir, weights_path=None, net_flag='vgg'):
                 saver.restore(sess=sess, save_path=weights_path)
 
             # 加载预训练参数
-            if net_flag == 'vgg' and weights_path is None:
-                pretrained_weights = np.load(
-                    './data/vgg16.npy',
-                    encoding='latin1').item()
-
-                for vv in tf.trainable_variables():
-                    weights = vv.name.split('/')
-                    if len(weights) >= 3 and weights[-3] in pretrained_weights:
-                        try:
-                            weights_key = weights[-3]
-                            weights = pretrained_weights[weights_key][0]
-                            _op = tf.assign(vv, weights)
-                            sess.run(_op)
-                        except Exception as e:
-                            continue
+            # if net_flag == 'vgg' and weights_path is None:
+            #     pretrained_weights = np.load(
+            #         './data/vgg16.npy',
+            #         encoding='latin1').item()
+            #
+            #     for vv in tf.trainable_variables():
+            #         weights = vv.name.split('/')
+            #         if len(weights) >= 3 and weights[-3] in pretrained_weights:
+            #             try:
+            #                 weights_key = weights[-3]
+            #                 weights = pretrained_weights[weights_key][0]
+            #                 _op = tf.assign(vv, weights)
+            #                 sess.run(_op)
+            #             except Exception as e:
+            #                 continue
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess, coord)
         writer = tf.summary.FileWriter("/tmp/SCNN-Tensorflow/log", sess.graph)
