@@ -65,6 +65,29 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
 
         return relu
 
+    def _res_stage(self, input_tensor, out_dims, k_size, name, stride=1, pad='SAME'):
+        with tf.variable_scope(name):
+            conv = self.conv2d(inputdata=input_tensor, out_channel=out_dims, kernel_size=k_size, stride=stride,
+                               use_bias=False, padding=pad, name='conv1')
+            bn = self.layerbn(inputdata=conv, is_training=self._is_training, name='bn1')
+
+            relu = self.relu(inputdata=bn, name='relu')
+
+            conv = self.conv2d(inputdata=relu, out_channel=out_dims, kernel_size=k_size, stride=1,
+                               use_bias=False, padding=pad, name='conv2')
+
+            out = self.layerbn(inputdata=conv, is_training=self._is_training, name='bn2')
+
+            if input_tensor.get_shape().as_list()[3] != out_dims:
+                input_tensor = self.conv2d(inputdata=input_tensor, out_channel=out_dims, kernel_size=1, stride=stride,
+                                           use_bias=False, padding='SAME', name='shortcut')
+                input_tensor = self.layerbn(inputdata=input_tensor, is_training=self._is_training, name='shortcut_bn')
+
+            out = tf.add(out, input_tensor)
+            out = self.relu(inputdata=out, name='out')
+
+        return out
+
     def _conv_dilated_stage(self, input_tensor, k_size, out_dims, name,
                             dilation=1, pad='SAME'):
         """
@@ -117,86 +140,43 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
         ret = OrderedDict()
         with tf.variable_scope(name):
             # conv stage 1_1
-            conv_1_1 = self._conv_stage(input_tensor=input_tensor, k_size=3,
-                                        out_dims=64, name='conv1_1')
+            conv_1 = self._conv_stage(input_tensor=input_tensor, k_size=3, out_dims=64, name='conv1_1')
 
-            # conv stage 1_2
-            conv_1_2 = self._conv_stage(input_tensor=conv_1_1, k_size=3,
-                                        out_dims=64, name='conv1_2')
+            res_1_1 = self._res_stage(input_tensor=conv_1, k_size=3, out_dims=64, name='res_1_1')
 
-            # pool stage 1
-            pool1 = self.maxpooling(inputdata=conv_1_2, kernel_size=2,
-                                    stride=2, name='pool1')
+            res_1_2 = self._res_stage(input_tensor=res_1_1, k_size=3, out_dims=64, name='res_1_2')
 
-            # conv stage 2_1
-            conv_2_1 = self._conv_stage(input_tensor=pool1, k_size=3,
-                                        out_dims=128, name='conv2_1')
+            res_2_1 = self._res_stage(input_tensor=res_1_2, k_size=3, out_dims=128, stride=2, name='res_2_1')
 
-            # conv stage 2_2
-            conv_2_2 = self._conv_stage(input_tensor=conv_2_1, k_size=3,
-                                        out_dims=128, name='conv2_2')
+            res_2_2 = self._res_stage(input_tensor=res_2_1, k_size=3, out_dims=128, stride=1, name='res_2_2')
 
-            # pool stage 2
-            pool2 = self.maxpooling(inputdata=conv_2_2, kernel_size=2,
-                                    stride=2, name='pool2')
+            res_3_1 = self._res_stage(input_tensor=res_2_2, k_size=3, out_dims=256, stride=2, name='res_3_1')
 
-            # conv stage 3_1
-            conv_3_1 = self._conv_stage(input_tensor=pool2, k_size=3,
-                                        out_dims=256, name='conv3_1')
+            res_3_2 = self._res_stage(input_tensor=res_3_1, k_size=3, out_dims=256, stride=1, name='res_3_2')
 
-            # conv_stage 3_2
-            conv_3_2 = self._conv_stage(input_tensor=conv_3_1, k_size=3,
-                                        out_dims=256, name='conv3_2')
+            res_4_1 = self._res_stage(input_tensor=res_3_2, k_size=3, out_dims=512, stride=2, name='res_4_1')
 
-            # conv stage 3_3
-            conv_3_3 = self._conv_stage(input_tensor=conv_3_2, k_size=3,
-                                        out_dims=256, name='conv3_3')
+            res_4_2 = self._res_stage(input_tensor=res_4_1, k_size=3, out_dims=512, stride=1, name='res_4_2')
 
-            # pool stage 3
-            pool3 = self.maxpooling(inputdata=conv_3_3, kernel_size=2,
-                                    stride=2, name='pool3')
-
-            # conv stage 4_1
-            conv_4_1 = self._conv_stage(input_tensor=pool3, k_size=3,
-                                        out_dims=512, name='conv4_1')
-
-            # conv stage 4_2
-            conv_4_2 = self._conv_stage(input_tensor=conv_4_1, k_size=3,
-                                        out_dims=512, name='conv4_2')
-
-            # conv stage 4_3
-            conv_4_3 = self._conv_stage(input_tensor=conv_4_2, k_size=3,
-                                        out_dims=512, name='conv4_3')
-
-            # add dilated convolution #
-
-            # conv stage 5_1
-            conv_5_1 = self._conv_dilated_stage(input_tensor=conv_4_3, k_size=3,
-                                                out_dims=512, dilation=2, name='conv5_1')
+            dilate_1_1 = self._conv_dilated_stage(input_tensor=res_4_2, k_size=3,
+                                                  out_dims=512, dilation=2, name='dilate_1_1')
 
             # conv stage 5_2
-            conv_5_2 = self._conv_dilated_stage(input_tensor=conv_5_1, k_size=3,
-                                                out_dims=512, dilation=2, name='conv5_2')
+            dilate_1_2 = self._conv_dilated_stage(input_tensor=dilate_1_1, k_size=3,
+                                                  out_dims=512, dilation=2, name='dilate_1_2')
 
             # conv stage 5_3
-            conv_5_3 = self._conv_dilated_stage(input_tensor=conv_5_2, k_size=3,
-                                                out_dims=512, dilation=2, name='conv5_3')
+            dilate_1_3 = self._conv_dilated_stage(input_tensor=dilate_1_2, k_size=3,
+                                                  out_dims=512, dilation=2, name='dilate_1_3')
 
-            # added part of SCNN #
-
-            # conv stage 5_4
-            conv_5_4 = self._conv_dilated_stage(input_tensor=conv_5_3, k_size=3,
-                                                out_dims=1024, dilation=4, name='conv5_4')
+            dilate_2_1 = self._conv_dilated_stage(input_tensor=dilate_1_3, k_size=3,
+                                                  out_dims=1024, dilation=4, name='dilate_2_1')
 
             # conv stage 5_5
-            conv_5_5 = self._conv_stage(input_tensor=conv_5_4, k_size=1,
-                                        out_dims=128, name='conv5_5')  # 8 x 36 x 100 x 128
+            dilate_2_2 = self._conv_stage(input_tensor=dilate_2_1, k_size=1,
+                                          out_dims=128, name='dilate_2_2')  # 8 x 36 x 100 x 128
 
-            top_hidden = conv_5_5  # alias
-
-            # add message passing #
-
-            # top to down #
+            top_hidden = dilate_2_2
 
             length = int(CFG.TRAIN.IMG_HEIGHT / 8)
             tf.assert_equal(length, top_hidden.get_shape().as_list()[1])
@@ -218,7 +198,8 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
                 scnn_u = tf.concat(feature_list_new, axis=1, name='scnn_u')
 
             # down to top #
-            # feature_list_old = feature_list_new  # use the top hidden
+            # feature_list_old = feature_list_new
+            # use the old one
             feature_list_new = [feature_list_old[-1]]
 
             w2 = tf.get_variable('W2', [1, 9, 128, 128],
@@ -239,8 +220,9 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
 
             feature_list_old = []
 
+            # use top hidden
             for cnt in range(width):
-                feature_list_old.append(tf.expand_dims(top_hidden[:, :, cnt, :], axis=2)) # use top hidden
+                feature_list_old.append(tf.expand_dims(top_hidden[:, :, cnt, :], axis=2))  # use top hidden
 
             feature_list_new = [feature_list_old[0]]
 
@@ -256,7 +238,8 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
 
             # right to left #
 
-            # feature_list_old = feature_list_new  # use the old one
+            # feature_list_old = feature_list_new
+            # use the old one
             feature_list_new = [feature_list_old[-1]]
 
             w4 = tf.get_variable('W4', [9, 1, 128, 128],
