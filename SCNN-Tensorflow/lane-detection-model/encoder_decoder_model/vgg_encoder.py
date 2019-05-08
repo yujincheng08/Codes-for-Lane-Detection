@@ -210,13 +210,12 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
             w1 = tf.get_variable('W1', [1, 9, 128, 128],
                                  initializer=tf.random_normal_initializer(0, math.sqrt(2.0 / (9 * 128 * 128 * 5))))
 
-            for cnt in range(1, length):
-                with tf.variable_scope("convs_6_1", reuse=True):
+            with tf.variable_scope("scnn_u", reuse=True):
+                for cnt in range(1, length):
                     conv_6_1 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_new[-1], w1, [1, 1, 1, 1], 'SAME')),
                                       feature_list_old[cnt])
                     feature_list_new.append(conv_6_1)
-
-            scnn_u = tf.concat(feature_list_new, axis=1)
+                scnn_u = tf.concat(feature_list_new, axis=1, name='scnn_u')
 
             # down to top #
             # feature_list_old = feature_list_new  # use the top hidden
@@ -225,15 +224,13 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
             w2 = tf.get_variable('W2', [1, 9, 128, 128],
                                  initializer=tf.random_normal_initializer(0, math.sqrt(2.0 / (9 * 128 * 128 * 5))))
 
-            for cnt in range(1, length):
-                with tf.variable_scope("convs_6_2", reuse=True):
+            with tf.variable_scope("scnn_d", reuse=True):
+                for cnt in range(1, length):
                     conv_6_2 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_new[-1], w2, [1, 1, 1, 1], 'SAME')),
                                       feature_list_old[-cnt])
                     feature_list_new.append(conv_6_2)
-
-            feature_list_new.reverse()
-
-            scnn_d = tf.concat(feature_list_new, axis=1)
+                    feature_list_new.reverse()
+                scnn_d = tf.concat(feature_list_new, axis=1, name='scnn_d')
 
             # left to right #
 
@@ -250,13 +247,12 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
             w3 = tf.get_variable('W3', [9, 1, 128, 128],
                                  initializer=tf.random_normal_initializer(0, math.sqrt(2.0 / (9 * 128 * 128 * 5))))
 
-            for cnt in range(1, width):
-                with tf.variable_scope("convs_6_3", reuse=True):
+            with tf.variable_scope("scnn_l", reuse=True):
+                for cnt in range(1, width):
                     conv_6_3 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_new[-1], w3, [1, 1, 1, 1], 'SAME')),
                                       feature_list_old[cnt])
                     feature_list_new.append(conv_6_3)
-
-            scnn_l = tf.concat(feature_list_new, axis=2)
+                scnn_l = tf.concat(feature_list_new, axis=2, name='scnn_l')
 
             # right to left #
 
@@ -266,15 +262,13 @@ class VGG16Encoder(cnn_basenet.CNNBaseModel):
             w4 = tf.get_variable('W4', [9, 1, 128, 128],
                                  initializer=tf.random_normal_initializer(0, math.sqrt(2.0 / (9 * 128 * 128 * 5))))
 
-            for cnt in range(1, width):
-                with tf.variable_scope("convs_6_4", reuse=True):
+            with tf.variable_scope("scnn_r", reuse=True):
+                for cnt in range(1, width):
                     conv_6_4 = tf.add(tf.nn.relu(tf.nn.conv2d(feature_list_new[-1], w4, [1, 1, 1, 1], 'SAME')),
                                       feature_list_old[-cnt])
                     feature_list_new.append(conv_6_4)
-
-            feature_list_new.reverse()
-
-            scnn_r = tf.concat(feature_list_new, axis=2)
+                    feature_list_new.reverse()
+                scnn_r = tf.concat(feature_list_new, axis=2, name='scnn_r')
 
             # processed_feature = tf.add_n([scnn_u, scnn_d, scnn_l, scnn_r])
             processed_feature = tf.concat([scnn_u, scnn_d, scnn_l, scnn_r], axis=3)

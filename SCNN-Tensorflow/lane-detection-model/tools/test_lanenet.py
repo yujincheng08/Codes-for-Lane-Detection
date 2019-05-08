@@ -13,6 +13,7 @@ import os.path as ops
 import argparse
 import math
 import tensorflow as tf
+import time
 import glog as log
 import cv2
 try:
@@ -77,10 +78,12 @@ def test_lanenet(image_path, weights_path, use_gpu, batch_size, save_dir):
         sess.run(tf.global_variables_initializer())
         saver.restore(sess=sess, save_path=weights_path)
         for i in range(math.ceil(len(test_dataset) / batch_size)):
-            print(i)
+            t_start_val = time.time()
             paths = test_dataset.next_batch()
             instance_seg_image, existence_output = sess.run([binary_seg_ret, instance_seg_ret],
                                                             feed_dict={input_tensor: paths})
+            cost_time_val = time.time() - t_start_val
+            print('epoch: {:d}, cost time: {:5f}s'.format(i, cost_time_val))
             for cnt, image_name in enumerate(paths):
                 print(image_name)
                 parent_path = os.path.dirname(image_name)
@@ -96,6 +99,7 @@ def test_lanenet(image_path, weights_path, use_gpu, batch_size, save_dir):
                     else:
                         file_exist.write('0 ')
                 file_exist.close()
+
     sess.close()
     return
 
