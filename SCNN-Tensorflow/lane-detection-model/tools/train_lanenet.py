@@ -104,12 +104,12 @@ def forward(batch_queue, net, phase, scope, optimizer=None):
     pred_4 = tf.count_nonzero(tf.multiply(tf.cast(tf.equal(label_instance_batch, 4), tf.int32),
                                           tf.cast(tf.equal(out_logits_out, 4), tf.int32)),
                               dtype=tf.int32)
-    gt_all = tf.count_nonzero(tf.cast(tf.greater(label_instance_batch, 0), tf.int32), dtype=tf.int32)
+    gt_all = tf.count_nonzero(tf.cast(tf.greater(label_instance_batch, 0), tf.int32), dtype=tf.int32) 
     gt_back = tf.count_nonzero(tf.cast(tf.equal(label_instance_batch, 0), tf.int32), dtype=tf.int32)
 
     pred_all = tf.add(tf.add(tf.add(pred_1, pred_2), pred_3), pred_4)
 
-    accuracy = tf.divide(tf.cast(pred_all, tf.float32), tf.cast(gt_all, tf.float32))
+    accuracy = tf.divide(tf.cast(pred_all, tf.float32), tf.cast(gt_all + 1, tf.float32))
     accuracy_back = tf.divide(tf.cast(pred_0, tf.float32), tf.cast(gt_back, tf.float32))
 
     # Compute mIoU of Lanes
