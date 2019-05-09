@@ -146,6 +146,10 @@ int main(int argc, char **argv)
 		read_lane_file(detect_file_name, detect_lanes);
 		//cerr<<count<<": "<<full_im_name<<endl;
 		anno_match = counter.count_im_pair(anno_lanes, detect_lanes);
+	  double precision = counter.get_precision();
+	  double recall = counter.get_recall();
+	  double F = 2 * precision * recall / (precision + recall);
+	  cout<<"recall: " << recall << " precision " << precision << " Fmeasure: "<<F<<endl;
 		if (show)
 		{
 			visualize(full_im_name, anno_lanes, detect_lanes, anno_match, width_lane);

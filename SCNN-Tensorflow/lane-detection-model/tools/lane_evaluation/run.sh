@@ -1,9 +1,9 @@
 root=../../
-data_dir=${root}data/CULane/
+data_dir=${root}CULane/
 exp=vgg_SCNN_DULR_w9
 detect_dir=${root}tools/prob2json/output/${exp}/
 w_lane=30;
-iou=0.3;  # Set iou to 0.3 or 0.5
+iou=0.5;  # Set iou to 0.3 or 0.5
 im_w=1640
 im_h=590
 frame=1
